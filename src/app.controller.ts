@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Post } from '@nestjs/common';
 import { AppService } from './app.service';
 import { IdentifyDto } from './identify.dto';
 
@@ -12,6 +12,7 @@ export class AppController {
   }
 
   @Post()
+  @HttpCode(200)
   identify(@Body() identifyDto:IdentifyDto){
     return this.appService.identify(identifyDto);
   }

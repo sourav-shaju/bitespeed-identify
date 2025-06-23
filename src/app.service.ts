@@ -3,8 +3,6 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Contact } from './contact.entity';
 import { IdentifyDto } from './identify.dto';
-import { link } from 'fs';
-
 
 @Injectable()
 export class AppService {
@@ -19,39 +17,86 @@ export class AppService {
   }
 
   async identify(identifyDto:IdentifyDto){
-    const existingContact = await this.contactRepository
+    let existingContacts = await this.contactRepository
       .createQueryBuilder('contact')
       .where('(contact.phoneNumber = :phoneNumber OR contact.email = :email)', {
         phoneNumber: identifyDto.phoneNumber,
         email: identifyDto.email,
       })
       .andWhere('contact.linkPrecedence = :linkPrecedence', { linkPrecedence: 'primary' })
-      .getOne();
-    if (existingContact) {
-      // If contact exists, return it
-      let secondaryCheck= await this.contactRepository
+      .orderBy('id', 'ASC')
+      .getMany();
+      
+      //console.log("existingContacts**", existingContacts);
+    if (existingContacts && existingContacts.length > 1) {
+      await this.contactRepository
+      .createQueryBuilder()
+      .update()
+      .set({ linkPrecedence: 'secondary', linkedId: existingContacts[0].id, updatedAt: new Date() })
+      .where('id = :id', { id: existingContacts[1].id })
+      .execute();
+
+      let response={contact:{}};
+      response.contact={
+        primaryContactId: existingContacts[0].id,
+        emails: [...existingContacts.map(contact => contact.email).filter(email => email)],
+        phoneNumbers: [...existingContacts.map(contact => contact.phoneNumber).filter(phone => phone)],
+        secondaryContactIds: [existingContacts[1].id]
+      }
+      return response
+    }
+
+    if (!existingContacts || existingContacts.length === 0) {      
+      const secondaryContact = await this.contactRepository
+        .createQueryBuilder('contact')
+        .where('(contact.phoneNumber = :phoneNumber OR contact.email = :email)', {
+          phoneNumber: identifyDto.phoneNumber,
+          email: identifyDto.email,
+        })
+        .andWhere('contact.linkPrecedence = :linkPrecedence', { linkPrecedence: 'secondary' })
+        .getOne();
+
+      if (secondaryContact) {
+        existingContacts = await this.contactRepository.find({
+          where: { id: secondaryContact.linkedId },
+        });
+      }
+    }
+
+    if (existingContacts && existingContacts.length > 0) {
+      let existingContact = existingContacts[0];
+      let secondaryCheckQuery= this.contactRepository
       .createQueryBuilder('contact')
-      .where('(contact.phoneNumber = :phoneNumber and contact.email = :email)', {
-        phoneNumber: identifyDto.phoneNumber,
-        email: identifyDto.email,
-      })
-      .getOne();
-      console.log("secondaryCheck**", secondaryCheck);
+
+      if (identifyDto.email && identifyDto.phoneNumber) {
+        secondaryCheckQuery.where(
+          'contact.email = :email and contact.phoneNumber = :phoneNumber',
+          {
+            email: identifyDto.email,
+            phoneNumber: identifyDto.phoneNumber,
+          }
+        );
+      } else if (identifyDto.email) {
+        secondaryCheckQuery.where('contact.email = :email', { email: identifyDto.email });
+      } else if (identifyDto.phoneNumber) {
+        secondaryCheckQuery.where('contact.phoneNumber = :phoneNumber', {
+          phoneNumber: identifyDto.phoneNumber,
+        });
+      }
+      let secondaryCheck= await secondaryCheckQuery.getOne();
+      
       if(!secondaryCheck){
-        //console.log("secondaryCheck", secondaryCheck);
         identifyDto.linkedId = existingContact.id;
         identifyDto.linkPrecedence = "secondary";
         let contact=this.contactRepository.create(identifyDto);
         await this.contactRepository.save(contact);
       }
       
-      
       const rows = await this.contactRepository
         .createQueryBuilder('contact')
         .select(['contact.id','contact.phoneNumber', 'contact.email'])
-        .where('(contact.phoneNumber = :phoneNumber OR contact.email = :email) and contact.linkPrecedence=:linkPrecedence', {
-          phoneNumber: identifyDto.phoneNumber,
-          email: identifyDto.email,
+        .where('contact.linkedId=:linkedId and contact.linkPrecedence=:linkPrecedence', {
+          linkedId: existingContact.id,
           linkPrecedence:"secondary"
         })
         .orderBy('id', 'ASC')
@@ -61,37 +106,28 @@ export class AppService {
       let secondaryContactIdsArr = rows.map(row => row.contact_id);
       phoneNumbersArr.unshift(existingContact.phoneNumber);
       emailsArr.unshift(existingContact.email);
-    //console.log(rows)
-    let response={contact:{}};
-      response.contact={
-        primaryContactId: existingContact.id,
-        emails: [...new Set(emailsArr)],
-        phoneNumbers: [...new Set(phoneNumbersArr)],
-        secondaryContactIds: secondaryContactIdsArr
-      }
-      return response
-    }else{
-      identifyDto.linkPrecedence = "primary";
-      let contact=this.contactRepository.create(identifyDto);
-      let saveResponse=await this.contactRepository.save(contact);
-      //console.log("saveResponse", saveResponse);
-      let response={contact:{}};
-      response.contact={
-        primaryContactId: saveResponse.id,
-        emails: [`${saveResponse.email}`],
-        phoneNumbers: [`${saveResponse.phoneNumber}`],
-        secondaryContactIds: []
-      }
-      return response
-    }
-    // // If contact does not exist, create a new one
-    // // Set linkPrecedence based on the presence of phoneNumber and email
-    // let linkPrecedence = '';
-    // if (identifyDto.phoneNumber && identifyDto.email) {
-    //   linkPrecedence = 'phoneNumber, email';
-    // }
-
     
-  }
+      let response={contact:{}};
+        response.contact={
+          primaryContactId: existingContact.id,
+          emails: [...new Set(emailsArr)],
+          phoneNumbers: [...new Set(phoneNumbersArr)],
+          secondaryContactIds: secondaryContactIdsArr
+        }
+        return response
+      }else{
+        identifyDto.linkPrecedence = "primary";
+        let contact=this.contactRepository.create(identifyDto);
+        let saveResponse=await this.contactRepository.save(contact);
+        let response={contact:{}};
+        response.contact={
+          primaryContactId: saveResponse.id,
+          emails: [`${saveResponse.email}`],
+          phoneNumbers: [`${saveResponse.phoneNumber}`],
+          secondaryContactIds: []
+        }
+        return response
+      }
+    }
   
 }

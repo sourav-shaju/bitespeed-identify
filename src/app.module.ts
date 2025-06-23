@@ -1,7 +1,6 @@
 import { Module } from '@nestjs/common';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
-import { userInfo } from 'os';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Contact } from './contact.entity';
 
