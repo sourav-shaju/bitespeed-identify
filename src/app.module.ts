@@ -8,11 +8,11 @@ import { Contact } from './contact.entity';
   imports: [
     TypeOrmModule.forRoot({
       type: 'postgres',
-      host: 'localhost',
+      host: 'dpg-d1cr9nmr433s738704d0-a',
       port: 5432,
-      username: 'postgres',
-      password: 'postgres123',
-      database: 'postgres',
+      username: 'postgres_qphd_user',
+      password: 'P7OodKkofCEepvDthnmVDAS7jvhEAqXn',
+      database: 'postgres_qphd',
       entities: [__dirname + '/**/*.entity{.ts,.js}'],
       synchronize: true,
     }),
