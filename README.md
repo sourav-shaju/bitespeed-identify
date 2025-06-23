@@ -99,4 +99,4 @@ Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
 
 ## Hosted API Endpoint
 
-You can access the API at: https://bitespeed-identify-a89g.onrender.com/identify
+You can access the POST API at: https://bitespeed-identify-a89g.onrender.com/identify
